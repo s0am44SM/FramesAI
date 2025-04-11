@@ -1,48 +1,74 @@
 import asyncio
 import websockets
 import json
+from openpyxl import load_workbook
+from datetime import datetime
 
-session_results = {}  # session_id: "ended"/"dropped"
+session_results = []  # list of dicts for easier export
 
 async def handle_session(index):
     try:
         uri = "ws://your.websocket.server/endpoint"
         async with websockets.connect(uri) as websocket:
-            # Step 1: Start session and receive session ID
+            start_time = datetime.now()
+
             await websocket.send(json.dumps({"action": "start"}))
             response = await websocket.recv()
             data = json.loads(response)
             session_id = data.get("session_id", f"unknown_{index}")
-            session_results[session_id] = "started"
 
-            # Optional delay to simulate session activity
-            await asyncio.sleep(1)
+            await asyncio.sleep(1)  # Simulate session activity
 
-            # Step 2: End session
             await websocket.send(json.dumps({"action": "end", "session_id": session_id}))
-            response = await websocket.recv()
-            end_data = json.loads(response)
+            end_response = await websocket.recv()
+            end_data = json.loads(end_response)
 
-            if end_data.get("status") == "ended":
-                session_results[session_id] = "ended"
-            else:
-                session_results[session_id] = "dropped"
+            status = "ended" if end_data.get("status") == "ended" else "dropped"
+            end_time = datetime.now()
+
+            session_results.append({
+                "Session ID": session_id,
+                "Status": status,
+                "Start Time": start_time.strftime("%Y-%m-%d %H:%M:%S.%f"),
+                "End Time": end_time.strftime("%Y-%m-%d %H:%M:%S.%f"),
+                "Latency (ms)": round((end_time - start_time).total_seconds() * 1000, 2)
+            })
+
     except Exception as e:
-        session_results[f"failed_{index}"] = "dropped"
+        session_results.append({
+            "Session ID": f"failed_{index}",
+            "Status": "dropped",
+            "Start Time": "N/A",
+            "End Time": "N/A",
+            "Latency (ms)": "N/A"
+        })
 
 async def main():
     tasks = [handle_session(i) for i in range(1000)]
     await asyncio.gather(*tasks)
 
-    # Calculate results
-    total_sessions = len(session_results)
-    ended_sessions = sum(1 for status in session_results.values() if status == "ended")
-    dropped_sessions = total_sessions - ended_sessions
-    drop_rate = (dropped_sessions / total_sessions) * 100
+    # Load workbook and write results
+    file_path = "/mnt/data/calculate_latency.xlsx"
+    wb = load_workbook(file_path)
 
-    print(f"Total Sessions: {total_sessions}")
-    print(f"Ended Sessions: {ended_sessions}")
-    print(f"Dropped Sessions: {dropped_sessions}")
-    print(f"Session Drop Rate: {drop_rate:.2f}%")
+    # Create or select sheet
+    sheet_name = "SessionResults"
+    if sheet_name in wb.sheetnames:
+        ws = wb[sheet_name]
+    else:
+        ws = wb.create_sheet(sheet_name)
+        ws.append(["Session ID", "Status", "Start Time", "End Time", "Latency (ms)"])
+
+    for result in session_results:
+        ws.append([
+            result["Session ID"],
+            result["Status"],
+            result["Start Time"],
+            result["End Time"],
+            result["Latency (ms)"]
+        ])
+
+    wb.save(file_path)
+    print(f"✅ Results written to {file_path}")
 
 asyncio.run(main())

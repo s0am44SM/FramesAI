@@ -1,0 +1,40 @@
+import pandas as pd
+from datetime import datetime, timedelta
+import random
+
+# === Load Excel file ===
+file_path = "C:\\Users\\Suraj Morye\\Documents\\FramesAI_Automation\\testdata\\excel\\calculate_latency.xlsx"
+df = pd.read_excel(file_path)
+
+# === Simulate Entry and Exit Timestamps ===
+base_time = datetime(2025, 4, 11, 12, 0, 0)
+entry_times = []
+exit_times = []
+latencies = []
+
+for i in range(len(df)):
+    entry_time = base_time + timedelta(seconds=i * 10)  # e.g., 10s gap between each call
+    latency = random.uniform(0.3, 1.2)  # latency in seconds
+    exit_time = entry_time + timedelta(seconds=latency)
+
+    entry_times.append(entry_time.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3])
+    exit_times.append(exit_time.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3])
+    latencies.append(round(latency, 3))
+
+# === Add New Columns ===
+df["Entry Timestamp"] = entry_times
+df["Exit Timestamp"] = exit_times
+df["Latency (s)"] = latencies
+
+# === Add Summary Row ===
+average_latency = round(sum(latencies) / len(latencies), 3)
+summary_row = pd.Series([""] * len(df.columns), index=df.columns)
+summary_row["Audio File Name"] = "Average Latency"
+summary_row["Latency (s)"] = average_latency
+
+# === Append and Save ===
+df = pd.concat([df, pd.DataFrame([summary_row])], ignore_index=True)
+output_path = "C:\\Users\\Suraj Morye\\Documents\\FramesAI_Automation\\testdata\\excel\\calculate_latency.xlsx"
+df.to_excel(output_path, index=False)
+
+print(f"✅ Excel file saved as: {output_path}")

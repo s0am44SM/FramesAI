@@ -1,0 +1,125 @@
+import os
+import pandas as pd
+import speech_recognition as sr
+from pydub import AudioSegment, effects
+from concurrent.futures import ThreadPoolExecutor
+from fuzzywuzzy import fuzz
+from transformers import BertTokenizer, BertModel
+import torch
+import numpy as np
+
+# Load API Key from Environment Variable
+API_KEY = "AIzaSyCHKziwirfxEjL_Y0pLvV9ENu_lpnxE3Bg"
+if not API_KEY:
+    raise ValueError("Missing Google API Key! Set GOOGLE_API_KEY as an environment variable.")
+
+# Load Excel File
+file_path = "C:\\Users\\Suraj Morye\\Documents\\FramesAI_Automation\\testdata\\excel\\updated_audio_files_metadata.xlsx"
+audio_folder = "C:\\Users\\Suraj Morye\\Documents\\FramesAI_Automation\\testdata\\audio_files"
+df = pd.read_excel(file_path)
+
+# Load BERT Model & Tokenizer
+tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+bert_model = BertModel.from_pretrained("bert-base-uncased")
+
+def preprocess_audio(audio_file_path):
+    try:
+        audio = AudioSegment.from_wav(audio_file_path)
+        audio = audio.set_channels(1)
+        audio = audio.set_frame_rate(16000)
+        audio = effects.normalize(audio)
+        temp_path = audio_file_path.replace('.wav', '_processed.wav')
+        audio.export(temp_path, format='wav')
+        return temp_path
+    except Exception as e:
+        print(f"Error preprocessing audio: {str(e)}")
+        return audio_file_path
+
+def convert_audio_to_text(audio_file_path):
+    recognizer = sr.Recognizer()
+    try:
+        processed_file = preprocess_audio(audio_file_path)
+        with sr.AudioFile(processed_file) as source:
+            recognizer.energy_threshold = 300
+            recognizer.dynamic_energy_threshold = True
+            audio = recognizer.record(source)
+            text = recognizer.recognize_google(audio, language='en-US')
+            print(f"\nReceived Text: {text}")
+            return text
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        return None
+    finally:
+        if 'processed_file' in locals() and processed_file != audio_file_path:
+            os.remove(processed_file)
+
+def bert_similarity(answer_text, expected_answer):
+    inputs = tokenizer([answer_text, expected_answer], return_tensors="pt", padding=True, truncation=True)
+    with torch.no_grad():
+        embeddings = bert_model(**inputs).last_hidden_state.mean(dim=1)
+    similarity = torch.nn.functional.cosine_similarity(embeddings[0], embeddings[1], dim=0).item()
+    return similarity * 100
+
+def fact_check(answer_text, expected_answer):
+    expected_keywords = set(expected_answer.lower().split())
+    answer_keywords = set(answer_text.lower().split())
+    common_keywords = expected_keywords.intersection(answer_keywords)
+    return (len(common_keywords) / len(expected_keywords)) * 100 if expected_keywords else 0
+
+def weighted_score(fuzzy, bert, fact):
+    return (0.2 * fuzzy) + (0.3 * bert) + (0.5 * fact)
+
+def categorize_answer(final_score, fact_score):
+    if fact_score < 50:
+        return "Incorrect"
+    elif final_score > 85:
+        return "Correct"
+    elif 50 <= final_score <= 85:
+        return "Partially Correct"
+    else:
+        return "Incorrect"
+
+def process_row(index, row):
+    answer_text = str(row["Answer Text"]).strip()
+    audio_filename = str(row["Audio File Name"]).strip()
+    audio_file_path = os.path.join(audio_folder, audio_filename)
+    
+    if not os.path.exists(audio_file_path):
+        print(f"Skipping row {index}, file not found: {audio_file_path}")
+        return index, None, None, None, None, None, None
+    
+    received_text = convert_audio_to_text(audio_file_path)
+    if not received_text:
+        print(f"Skipping row {index}, could not transcribe audio.")
+        return index, None, None, None, None, None, None
+    
+    fuzzy_score = fuzz.ratio(answer_text, received_text)
+    bert_score = bert_similarity(answer_text, received_text)
+    fact_score = fact_check(answer_text, received_text)
+    final_score = weighted_score(fuzzy_score, bert_score, fact_score)
+    category = categorize_answer(final_score, fact_score)
+    
+    return index, received_text, fuzzy_score, bert_score, fact_score, final_score, category
+
+def update_excel():
+    updated_file = "C:\\Users\\Suraj Morye\\Documents\\FramesAI_Automation\\testdata\\excel\\updated_audio_files_metadata2.xlsx"
+    df.to_excel(updated_file, index=False)
+    print(f"Excel file updated successfully: {updated_file}")
+
+def main():
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        results = executor.map(lambda args: process_row(*args), df.iterrows())
+        
+        for index, received_text, fuzzy_score, bert_score, fact_score, final_score, category in results:
+            if received_text is not None:
+                df.at[index, "Received Text"] = received_text
+                df.at[index, "Fuzzy Score"] = fuzzy_score
+                df.at[index, "BERT Score"] = bert_score
+                df.at[index, "Fact Check Score"] = fact_score
+                df.at[index, "Final Weighted Score"] = final_score
+                df.at[index, "Result Category"] = category
+    
+    update_excel()
+
+if __name__ == "__main__":
+    main()

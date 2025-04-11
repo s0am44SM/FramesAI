@@ -1,0 +1,48 @@
+import asyncio
+import websockets
+import json
+
+session_results = {}  # session_id: "ended"/"dropped"
+
+async def handle_session(index):
+    try:
+        uri = "ws://your.websocket.server/endpoint"
+        async with websockets.connect(uri) as websocket:
+            # Step 1: Start session and receive session ID
+            await websocket.send(json.dumps({"action": "start"}))
+            response = await websocket.recv()
+            data = json.loads(response)
+            session_id = data.get("session_id", f"unknown_{index}")
+            session_results[session_id] = "started"
+
+            # Optional delay to simulate session activity
+            await asyncio.sleep(1)
+
+            # Step 2: End session
+            await websocket.send(json.dumps({"action": "end", "session_id": session_id}))
+            response = await websocket.recv()
+            end_data = json.loads(response)
+
+            if end_data.get("status") == "ended":
+                session_results[session_id] = "ended"
+            else:
+                session_results[session_id] = "dropped"
+    except Exception as e:
+        session_results[f"failed_{index}"] = "dropped"
+
+async def main():
+    tasks = [handle_session(i) for i in range(1000)]
+    await asyncio.gather(*tasks)
+
+    # Calculate results
+    total_sessions = len(session_results)
+    ended_sessions = sum(1 for status in session_results.values() if status == "ended")
+    dropped_sessions = total_sessions - ended_sessions
+    drop_rate = (dropped_sessions / total_sessions) * 100
+
+    print(f"Total Sessions: {total_sessions}")
+    print(f"Ended Sessions: {ended_sessions}")
+    print(f"Dropped Sessions: {dropped_sessions}")
+    print(f"Session Drop Rate: {drop_rate:.2f}%")
+
+asyncio.run(main())

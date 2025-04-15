@@ -1,0 +1,35 @@
+import asyncio
+import websockets
+import json
+
+# Simulated test cases
+test_cases = {
+    "What's 256 * 89?": "calculator",
+    "What's the weather in Paris?": "search_engine",
+    "Show me the latest sales report.": "database"
+}
+
+correct = 0
+total = len(test_cases)
+
+async def evaluate_tools():
+    global correct
+    uri = "ws://your-llm-endpoint.com/ws"
+    
+    async with websockets.connect(uri) as websocket:
+        for query, expected_tool in test_cases.items():
+            await websocket.send(json.dumps({"query": query}))
+            response = await websocket.recv()
+            response_data = json.loads(response)
+            
+            selected_tool = response_data.get("selected_tool")
+
+            if selected_tool == expected_tool:
+                correct += 1
+            print(f"Query: {query} | Expected: {expected_tool} | Got: {selected_tool}")
+
+    accuracy = (correct / total) * 100
+    print(f"\n✅ Tool Selection Accuracy: {accuracy:.2f}%")
+
+# Run the async function
+asyncio.run(evaluate_tools())

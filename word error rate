@@ -1,0 +1,25 @@
+import pandas as pd
+import jiwer
+
+# Load the Excel file
+df = pd.read_excel("stt_results.xlsx")  # Replace with your file path
+
+# Columns: 'Ground Truth' and 'STT Output'
+ground_truths = df['Ground Truth'].astype(str).tolist()
+stt_outputs = df['STT Output'].astype(str).tolist()
+
+total_wer = 0.0
+wer_list = []
+
+# Compute WER for each row
+for gt, stt in zip(ground_truths, stt_outputs):
+    wer = jiwer.wer(gt, stt)
+    wer_list.append(wer)
+    print(f"GT:  {gt}")
+    print(f"STT: {stt}")
+    print(f"WER: {wer:.2%}\n")
+    total_wer += wer
+
+# Average WER
+average_wer = total_wer / len(wer_list)
+print(f"🔍 Average WER across all samples: {average_wer:.2%}")

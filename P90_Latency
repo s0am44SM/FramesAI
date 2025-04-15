@@ -1,0 +1,20 @@
+from datetime import datetime
+import numpy as np
+
+# Sample logs (replace with real log data)
+logs = [
+    {"entry": "2025-04-11T10:00:00.123Z", "exit": "2025-04-11T10:00:00.543Z"},
+    {"entry": "2025-04-11T10:00:01.100Z", "exit": "2025-04-11T10:00:01.600Z"},
+    # ... more entries
+]
+
+latencies = []
+for log in logs:
+    entry = datetime.fromisoformat(log["entry"].replace("Z", "+00:00"))
+    exit = datetime.fromisoformat(log["exit"].replace("Z", "+00:00"))
+    latency = (exit - entry).total_seconds() * 1000  # ms
+    latencies.append(latency)
+
+# Calculate P90
+p90_latency = np.percentile(latencies, 90)
+print(f"P90 Latency: {p90_latency:.2f} ms")

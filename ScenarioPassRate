@@ -1,0 +1,26 @@
+import pandas as pd
+
+# 🔹 1. Sample Data (Replace this with your actual data)
+# Test case results for functional scenarios
+data = {
+    "Scenario": ["Weather Query", "Product Info", "Booking", "Support Inquiry", "Payment Processing"],
+    "Total Test Cases": [5, 4, 6, 3, 5],  # Number of test cases for each scenario
+    "Passed Test Cases": [4, 3, 6, 2, 4]  # Number of passed test cases for each scenario
+}
+
+# Create a DataFrame
+df = pd.DataFrame(data)
+
+# 🔹 2. Calculate Pass Rate for Each Scenario
+df["Pass Rate (%)"] = (df["Passed Test Cases"] / df["Total Test Cases"]) * 100
+
+# 🔹 3. Calculate Overall Pass Rate
+total_passed = df["Passed Test Cases"].sum()
+total_cases = df["Total Test Cases"].sum()
+overall_pass_rate = (total_passed / total_cases) * 100
+
+# 🔹 4. Output Results
+print("\n📊 Scenario Pass Rates:")
+print(df[["Scenario", "Pass Rate (%)"]])
+
+print(f"\n✅ Overall Pass Rate: {overall_pass_rate:.2f}%")
